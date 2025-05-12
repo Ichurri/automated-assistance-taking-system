@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Logs
+logs/
+
+# Data files (excluding directories themselves)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Model files
+models/*.h5
+models/*.npy
+models/*.png
+!models/.gitkeep
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings
+.vscode/
+
+# Environment variables
+.env
+
+# OS specific files
+.DS_Store
+Thumbs.db
