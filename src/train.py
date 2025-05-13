@@ -10,7 +10,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint # type: ig
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelBinarizer
 
-from utils import load_from_h5, encode_labels, ensure_directory
+from src.utils import load_from_h5, encode_labels, ensure_directory
 
 class FaceRecognitionModel:
     """
@@ -69,8 +69,7 @@ class FaceRecognitionModel:
         )
         
         return model
-    
-    def train(self, features_file, epochs=50, batch_size=32, validation_split=0.2):
+    def train(self, features_file, epochs=50, batch_size=32, validation_split=0.2, custom_callbacks=None):
         """
         Train the neural network on HOG features.
         
@@ -79,6 +78,7 @@ class FaceRecognitionModel:
             epochs (int): Number of training epochs
             batch_size (int): Batch size for training
             validation_split (float): Fraction of data to use for validation
+            custom_callbacks (list): Optional list of custom Keras callbacks
             
         Returns:
             dict: Training history
@@ -91,10 +91,15 @@ class FaceRecognitionModel:
             
         # Encode string labels to integers
         encoded_labels, self.label_encoder = encode_labels(labels)
-        
-        # Convert to one-hot encoding
+          # Convert to one-hot encoding
         label_binarizer = LabelBinarizer()
         one_hot_labels = label_binarizer.fit_transform(encoded_labels)
+        
+        # Ensure proper shape for multiclass classification
+        if one_hot_labels.shape[1] == 1:
+            # If only one class is found, add a dummy class to make it binary
+            logging.warning("Only one class found in dataset. Adding dummy class for proper training.")
+            one_hot_labels = np.hstack((1 - one_hot_labels, one_hot_labels))
         
         # Split data into training and validation sets
         X_train, X_val, y_train, y_val = train_test_split(
@@ -121,6 +126,10 @@ class FaceRecognitionModel:
                 verbose=1
             )
         ]
+        
+        # Add custom callbacks if provided
+        if custom_callbacks:
+            callbacks.extend(custom_callbacks)
         
         # Train model
         history = self.model.fit(
