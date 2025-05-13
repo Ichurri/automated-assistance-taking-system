@@ -3,7 +3,7 @@ import cv2
 import logging
 import numpy as np
 from skimage.feature import hog
-from utils import ensure_directory, preprocess_image, save_to_h5
+from src.utils import ensure_directory, preprocess_image, save_to_h5
 
 class FeatureExtractor:
     """
