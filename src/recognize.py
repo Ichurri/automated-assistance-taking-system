@@ -218,3 +218,44 @@ class FaceRecognizer:
         
         if output_path is not None:
             logging.info(f"Processed video saved to {output_path}")
+    
+    def recognize_image(self, image_path):
+        """
+        Detect and recognize faces in a static image.
+        
+        Args:
+            image_path (str): Path to the image file
+            
+        Returns:
+            tuple: (image with annotations, list of recognized faces)
+        """
+        # Read the image
+        frame = cv2.imread(image_path)
+        if frame is None:
+            logging.error(f"Error: Could not read image from {image_path}")
+            return None, []
+        
+        # Get recognized faces
+        recognized_faces = self.detect_and_recognize(frame)
+        
+        # Draw bounding boxes and labels on the image
+        annotated_frame = frame.copy()
+        for (x, y, w, h, label, confidence) in recognized_faces:
+            # Draw rectangle around face
+            cv2.rectangle(annotated_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            
+            # Prepare label text with confidence
+            text = f"{label} ({confidence:.2f})"
+            
+            # Draw filled rectangle for text background
+            text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+            cv2.rectangle(annotated_frame, 
+                         (x, y-text_size[1]-10), 
+                         (x+text_size[0], y), 
+                         (0, 255, 0), -1)
+            
+            # Draw text
+            cv2.putText(annotated_frame, text, (x, y-5),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        
+        return annotated_frame, recognized_faces

@@ -90,7 +90,12 @@ class AttendanceSystemApp:
         notebook.add(recognition_tab, text="Recognition")
         self.setup_recognition_tab(recognition_tab)
         
-        # Tab 6: Attendance Records
+        # Tab 6: Photo Recognition
+        photo_tab = ttk.Frame(notebook)
+        notebook.add(photo_tab, text="Photo Recognition")
+        self.setup_photo_recognition_tab(photo_tab)
+        
+        # Tab 7: Attendance Records
         attendance_tab = ttk.Frame(notebook)
         notebook.add(attendance_tab, text="Attendance")
         self.setup_attendance_tab(attendance_tab)
@@ -438,6 +443,61 @@ class AttendanceSystemApp:
         self.rec_video_label.configure(image=placeholder_tk)
         self.rec_video_label.image = placeholder_tk
     
+    def setup_photo_recognition_tab(self, parent):
+        """Set up the photo recognition tab."""
+        frame = ttk.Frame(parent, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Left panel - controls
+        left_panel = ttk.Frame(frame, padding=10, width=300)
+        left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        left_panel.pack_propagate(False)
+        
+        ttk.Label(left_panel, text="Photo Recognition", font=("Helvetica", 12, "bold")).pack(anchor="w", pady=(0, 10))
+        
+        # Settings frame
+        settings_frame = ttk.LabelFrame(left_panel, text="Settings", padding=10)
+        settings_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(settings_frame, text="Confidence Threshold:").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        self.photo_confidence_var = tk.DoubleVar(value=0.6)
+        confidence_entry = ttk.Entry(settings_frame, textvariable=self.photo_confidence_var)
+        confidence_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
+        
+        settings_frame.columnconfigure(1, weight=1)
+        
+        # Control buttons
+        buttons_frame = ttk.Frame(left_panel)
+        buttons_frame.pack(fill=tk.X, pady=10)
+        
+        self.upload_photo_btn = ttk.Button(buttons_frame, text="Upload Photo", command=self.upload_photo)
+        self.upload_photo_btn.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.process_photo_btn = ttk.Button(buttons_frame, text="Process Photo", command=self.process_photo, state="disabled")
+        self.process_photo_btn.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.save_result_btn = ttk.Button(buttons_frame, text="Save Result", command=self.save_photo_result, state="disabled")
+        self.save_result_btn.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Recognition results
+        results_frame = ttk.LabelFrame(left_panel, text="Results", padding=10)
+        results_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        self.photo_results_text = tk.Text(results_frame, height=10, width=30, wrap=tk.WORD)
+        self.photo_results_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Right panel - image display
+        right_panel = ttk.Frame(frame)
+        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        
+        self.photo_canvas = tk.Canvas(right_panel, bg="black")
+        self.photo_canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # Store variables for photo recognition
+        self.current_photo_path = None
+        self.processed_photo = None
+        self.photo_recognition_results = []
+
     def setup_attendance_tab(self, parent):
         """Set up the attendance records tab."""
         frame = ttk.Frame(parent, padding=10)
@@ -1139,6 +1199,178 @@ class AttendanceSystemApp:
         
         # Close the window
         self.root.destroy()
+
+    def upload_photo(self):
+        """Upload a photo for face recognition."""
+        file_path = filedialog.askopenfilename(
+            title="Select Photo",
+            filetypes=[("Image files", "*.jpg *.jpeg *.png")]
+        )
+        
+        if not file_path:
+            return
+            
+        self.current_photo_path = file_path
+        self.processed_photo = None
+        self.photo_recognition_results = []
+        
+        # Display original image
+        try:
+            # Read image with PIL for display
+            pil_img = Image.open(file_path)
+            
+            # Resize while maintaining aspect ratio
+            img_width, img_height = pil_img.size
+            canvas_width = self.photo_canvas.winfo_width()
+            canvas_height = self.photo_canvas.winfo_height()
+            
+            # Calculate new dimensions
+            ratio = min(canvas_width/img_width, canvas_height/img_height)
+            new_width = int(img_width * ratio)
+            new_height = int(img_height * ratio)
+            
+            pil_img = pil_img.resize((new_width, new_height), Image.LANCZOS)
+            
+            # Convert to PhotoImage
+            self.photo_tk = ImageTk.PhotoImage(pil_img)
+            
+            # Show on canvas
+            self.photo_canvas.create_image(
+                canvas_width//2, canvas_height//2,
+                image=self.photo_tk, anchor=tk.CENTER
+            )
+            
+            # Update status
+            self.photo_results_text.delete(1.0, tk.END)
+            self.photo_results_text.insert(tk.END, f"Photo loaded: {os.path.basename(file_path)}\n")
+            self.photo_results_text.insert(tk.END, "Click 'Process Photo' to detect and recognize faces.")
+            
+            # Enable process button
+            self.process_photo_btn.config(state="normal")
+            self.save_result_btn.config(state="disabled")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load image: {str(e)}")
+            self.photo_results_text.delete(1.0, tk.END)
+            self.photo_results_text.insert(tk.END, f"Error loading image: {str(e)}")
+    
+    def process_photo(self):
+        """Process the uploaded photo and recognize faces."""
+        if not self.current_photo_path:
+            messagebox.showinfo("Info", "Please upload a photo first.")
+            return
+            
+        try:
+            # Ensure the model is loaded
+            if not hasattr(self.model, 'model') or self.model.model is None:
+                model_loaded = self.model.load_model()
+                if not model_loaded:
+                    messagebox.showerror("Error", "Failed to load the recognition model.")
+                    return
+            
+            # Set confidence threshold
+            min_confidence = self.photo_confidence_var.get()
+            
+            # Initialize recognizer if needed
+            if self.recognizer is None:
+                self.recognizer = FaceRecognizer(self.model, min_confidence=min_confidence)
+            else:
+                self.recognizer.min_confidence = min_confidence
+            
+            # Recognize faces in the image
+            processed_img, recognition_results = self.recognizer.recognize_image(self.current_photo_path)
+            
+            if processed_img is None:
+                messagebox.showerror("Error", "Failed to process the image.")
+                return
+                
+            self.processed_photo = processed_img
+            self.photo_recognition_results = recognition_results
+            
+            # Convert OpenCV image to PIL format
+            processed_img_rgb = cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(processed_img_rgb)
+            
+            # Resize while maintaining aspect ratio
+            img_width, img_height = pil_img.size
+            canvas_width = self.photo_canvas.winfo_width()
+            canvas_height = self.photo_canvas.winfo_height()
+            
+            # Calculate new dimensions
+            ratio = min(canvas_width/img_width, canvas_height/img_height)
+            new_width = int(img_width * ratio)
+            new_height = int(img_height * ratio)
+            
+            pil_img = pil_img.resize((new_width, new_height), Image.LANCZOS)
+            
+            # Convert to PhotoImage
+            self.photo_tk = ImageTk.PhotoImage(pil_img)
+            
+            # Show on canvas
+            self.photo_canvas.delete("all")
+            self.photo_canvas.create_image(
+                canvas_width//2, canvas_height//2,
+                image=self.photo_tk, anchor=tk.CENTER
+            )
+            
+            # Update results text
+            self.photo_results_text.delete(1.0, tk.END)
+            if recognition_results:
+                self.photo_results_text.insert(tk.END, f"Found {len(recognition_results)} face(s):\n\n")
+                for i, (_, _, _, _, label, confidence) in enumerate(recognition_results):
+                    self.photo_results_text.insert(tk.END, f"Face {i+1}: {label} ({confidence:.2f})\n")
+                
+                # Enable save button
+                self.save_result_btn.config(state="normal")
+            else:
+                self.photo_results_text.insert(tk.END, "No faces detected in the image.")
+                self.save_result_btn.config(state="disabled")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Error processing photo: {str(e)}")
+            self.photo_results_text.delete(1.0, tk.END)
+            self.photo_results_text.insert(tk.END, f"Error processing photo: {str(e)}")
+    
+    def save_photo_result(self):
+        """Save the processed photo with face recognition results."""
+        if self.processed_photo is None:
+            messagebox.showinfo("Info", "No processed photo to save.")
+            return
+            
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".jpg",
+            filetypes=[("JPEG files", "*.jpg"), ("PNG files", "*.png")],
+            title="Save Processed Photo"
+        )
+        
+        if not save_path:
+            return
+            
+        try:
+            cv2.imwrite(save_path, self.processed_photo)
+            messagebox.showinfo("Success", f"Processed photo saved to {save_path}")
+            
+            # Also update attendance records if there are recognized persons
+            for _, _, _, _, label, confidence in self.photo_recognition_results:
+                if label != "Unknown" and confidence >= self.photo_confidence_var.get():
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    if label not in self.attendance_records:
+                        self.attendance_records[label] = []
+                        
+                    self.attendance_records[label].append({
+                        'timestamp': timestamp,
+                        'source': 'photo',
+                        'confidence': confidence
+                    })
+                    
+                    self.logger.info(f"{label} detected in photo - attendance recorded")
+            
+            # Refresh attendance tab if needed
+            self.update_attendance_display()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save photo: {str(e)}")
 
 def main():
     """Main function to start the application."""
