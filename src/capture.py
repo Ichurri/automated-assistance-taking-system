@@ -3,7 +3,7 @@ import time
 import cv2
 import logging
 import numpy as np
-from utils import ensure_directory, preprocess_image
+from src.utils import ensure_directory, preprocess_image
 
 class FaceCapture:
     """
