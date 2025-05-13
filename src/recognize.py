@@ -4,8 +4,8 @@ import logging
 import numpy as np
 from skimage.feature import hog
 
-from utils import preprocess_image
-from extract import FeatureExtractor
+from src.utils import preprocess_image
+from src.extract import FeatureExtractor
 
 class FaceRecognizer:
     """
