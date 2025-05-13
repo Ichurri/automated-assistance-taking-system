@@ -99,6 +99,81 @@ python src/main.py --mode recognize
 
 ### Graphical User Interface
 
+The system includes a fully-featured GUI that makes all operations easy and accessible. To start the GUI:
+
+```
+python run_app.py
+```
+
+The GUI includes several tabs:
+
+1. **Dashboard**: Overview of system status and quick actions
+2. **Capture**: Capture new face images
+3. **Dataset**: Manage captured face images
+4. **Training**: Train the face recognition model
+5. **Recognition**: Perform real-time face recognition
+6. **Photo Recognition**: Process static photos
+7. **Courses**: Manage courses, schedules, and student assignments
+8. **Attendance**: View and export attendance records
+
+## Course Management
+
+The system now includes comprehensive course management functionality that integrates with face recognition for attendance tracking.
+
+### Features
+
+1. **Course Registration**
+   - Create courses with name, schedule, and days of the week
+   - Edit existing course details
+   - Delete courses when no longer needed
+
+2. **Student Assignment**
+   - Assign students from the face database to specific courses
+   - Remove students from courses
+   - View enrolled students for each course
+
+3. **Course-Specific Attendance**
+   - Take attendance for specific courses
+   - System will only record attendance for students enrolled in the course
+   - Visual indicators show when recognized faces are not enrolled
+
+4. **Attendance Filtering**
+   - Filter attendance records by course and date
+   - Export filtered attendance data to CSV
+
+### Usage Guide
+
+#### Creating a Course
+
+1. Navigate to the **Courses** tab
+2. Click "Add Course"
+3. Enter the course name, schedule (format: HH:MM-HH:MM), and select days
+4. Click "Save"
+
+#### Assigning Students to a Course
+
+1. Select a course from the list
+2. Click "Add Student" to see available faces from the database
+3. Select a student and click "Add"
+
+#### Taking Course-Specific Attendance
+
+1. Select a course from the list
+2. Click "Take Attendance"
+3. This will switch to the Recognition tab with the course context active
+4. The system will only record attendance for students enrolled in the selected course
+5. Non-enrolled students will be highlighted in orange
+
+#### Viewing Attendance Records
+
+1. Navigate to the **Attendance** tab
+2. Use the course and date filters to view specific records
+3. Click "Export" to save the filtered data as a CSV file
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
 For a more user-friendly experience, you can use the GUI application:
 
 ```

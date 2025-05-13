@@ -43,6 +43,12 @@ class AttendanceSystemApp:
         self.current_person = None
         self.attendance_records = {}
         
+        # Course management variables
+        self.courses = {}  # Dictionary to store course information
+        self.current_course = None  # Currently selected course
+        self.current_attendance_context = None  # Context for current attendance session
+        self.load_courses()  # Load saved courses if available
+        
         # Initialize modules
         self.face_capture = FaceCapture()
         self.feature_extractor = FeatureExtractor()
@@ -95,7 +101,12 @@ class AttendanceSystemApp:
         notebook.add(photo_tab, text="Photo Recognition")
         self.setup_photo_recognition_tab(photo_tab)
         
-        # Tab 7: Attendance Records
+        # Tab 7: Course Management
+        course_tab = ttk.Frame(notebook)
+        notebook.add(course_tab, text="Courses")
+        self.setup_course_tab(course_tab)
+        
+        # Tab 8: Attendance Records
         attendance_tab = ttk.Frame(notebook)
         notebook.add(attendance_tab, text="Attendance")
         self.setup_attendance_tab(attendance_tab)
@@ -143,6 +154,37 @@ class AttendanceSystemApp:
         ttk.Label(info_frame, text=f"Model Status: {model_status}").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Label(info_frame, text=f"Persons in Dataset: {persons}").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         ttk.Label(info_frame, text=f"Total Face Images: {images}").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(info_frame, text=f"Total Courses: {len(self.courses)}").grid(row=3, column=0, sticky="w", padx=5, pady=2)
+        
+        # Course information section
+        courses_frame = ttk.LabelFrame(frame, text="Course Information", padding=10)
+        courses_frame.pack(fill=tk.X, pady=10)
+        
+        # Create a simple treeview to display course summary
+        columns = ("name", "schedule", "days", "students")
+        self.dashboard_course_tree = ttk.Treeview(courses_frame, columns=columns, show="headings", height=3)
+        
+        # Define headings
+        self.dashboard_course_tree.heading("name", text="Course Name")
+        self.dashboard_course_tree.heading("schedule", text="Schedule")
+        self.dashboard_course_tree.heading("days", text="Days")
+        self.dashboard_course_tree.heading("students", text="Students")
+        
+        # Define columns
+        self.dashboard_course_tree.column("name", width=150)
+        self.dashboard_course_tree.column("schedule", width=100)
+        self.dashboard_course_tree.column("days", width=150)
+        self.dashboard_course_tree.column("students", width=70)
+        
+        # Pack tree 
+        self.dashboard_course_tree.pack(fill=tk.X, pady=5)
+        
+        # Add courses to treeview
+        self.update_dashboard_courses()
+        
+        # Button to manage courses
+        ttk.Button(courses_frame, text="Manage Courses", 
+                  command=lambda: self.select_tab(6)).pack(anchor="e", pady=5)  # 6 is index of Courses tab
         
         # Quick actions
         actions_frame = ttk.LabelFrame(frame, text="Quick Actions", padding=10)
@@ -160,7 +202,7 @@ class AttendanceSystemApp:
         ttk.Button(actions_frame, text="Start Recognition", 
                   command=lambda: self.select_tab(4)).grid(row=0, column=3, padx=5, pady=5)
         
-        # Recent activity (placeholder)
+        # Recent activity
         activity_frame = ttk.LabelFrame(frame, text="Recent Activity", padding=10)
         activity_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
@@ -492,12 +534,11 @@ class AttendanceSystemApp:
         
         self.photo_canvas = tk.Canvas(right_panel, bg="black")
         self.photo_canvas.pack(fill=tk.BOTH, expand=True)
-        
-        # Store variables for photo recognition
+          # Store variables for photo recognition
         self.current_photo_path = None
         self.processed_photo = None
         self.photo_recognition_results = []
-
+        
     def setup_attendance_tab(self, parent):
         """Set up the attendance records tab."""
         frame = ttk.Frame(parent, padding=10)
@@ -509,24 +550,49 @@ class AttendanceSystemApp:
         
         ttk.Label(top_frame, text="Attendance Records", font=("Helvetica", 12, "bold")).pack(side=tk.LEFT)
         
+        # Course selection
+        course_frame = ttk.Frame(top_frame)
+        course_frame.pack(side=tk.LEFT, padx=20)
+        
+        ttk.Label(course_frame, text="Filter by course:").pack(side=tk.LEFT, padx=(0, 5))
+        self.attendance_course_var = tk.StringVar(value="All Courses")
+        self.course_combobox = ttk.Combobox(course_frame, textvariable=self.attendance_course_var, width=20)
+        self.course_combobox.pack(side=tk.LEFT)
+        self.course_combobox.bind("<<ComboboxSelected>>", self.filter_attendance_by_course)
+        
+        # Date filter (optional)
+        date_frame = ttk.Frame(top_frame)
+        date_frame.pack(side=tk.LEFT, padx=20)
+        
+        ttk.Label(date_frame, text="Date:").pack(side=tk.LEFT, padx=(0, 5))
+        self.attendance_date_var = tk.StringVar(value="All Dates")
+        self.date_combobox = ttk.Combobox(date_frame, textvariable=self.attendance_date_var, width=15)
+        self.date_combobox.pack(side=tk.LEFT)
+        self.date_combobox.bind("<<ComboboxSelected>>", self.filter_attendance_by_date)
+        
+        # Export and clear buttons
         ttk.Button(top_frame, text="Export", command=self.export_attendance).pack(side=tk.RIGHT, padx=5)
         ttk.Button(top_frame, text="Clear All", command=self.clear_attendance).pack(side=tk.RIGHT, padx=5)
         
         # Attendance treeview
-        columns = ("name", "time_in", "time_out", "duration")
+        columns = ("name", "course", "date", "time_in", "time_out", "duration")
         self.attendance_tree = ttk.Treeview(frame, columns=columns, show="headings")
         
         # Define headings
         self.attendance_tree.heading("name", text="Name")
+        self.attendance_tree.heading("course", text="Course")
+        self.attendance_tree.heading("date", text="Date")
         self.attendance_tree.heading("time_in", text="Time In")
         self.attendance_tree.heading("time_out", text="Time Out")
         self.attendance_tree.heading("duration", text="Duration")
         
         # Define columns
-        self.attendance_tree.column("name", width=200)
-        self.attendance_tree.column("time_in", width=150)
-        self.attendance_tree.column("time_out", width=150)
-        self.attendance_tree.column("duration", width=100)
+        self.attendance_tree.column("name", width=150)
+        self.attendance_tree.column("course", width=150)
+        self.attendance_tree.column("date", width=100)
+        self.attendance_tree.column("time_in", width=100)
+        self.attendance_tree.column("time_out", width=100)
+        self.attendance_tree.column("duration", width=80)
         
         # Add a scrollbar
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.attendance_tree.yview)
@@ -535,11 +601,106 @@ class AttendanceSystemApp:
         # Pack tree and scrollbar
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.attendance_tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Update course dropdown
+        self.update_attendance_course_filter()
+    
+    def setup_course_tab(self, parent):
+        """Set up the course management tab."""
+        frame = ttk.Frame(parent, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Create a horizontal split with courses on left, students on right
+        left_frame = ttk.Frame(frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        
+        right_frame = ttk.Frame(frame)
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        
+        # ---- Left frame: Course Management ----
+        ttk.Label(left_frame, text="Course Management", font=("Helvetica", 12, "bold")).pack(anchor="w", pady=(0, 10))
+        
+        # Course list frame
+        course_list_frame = ttk.LabelFrame(left_frame, text="Courses", padding=10)
+        course_list_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Course Treeview
+        columns = ("name", "schedule", "days")
+        self.course_tree = ttk.Treeview(course_list_frame, columns=columns, show="headings")
+        
+        # Define headings
+        self.course_tree.heading("name", text="Course Name")
+        self.course_tree.heading("schedule", text="Schedule")
+        self.course_tree.heading("days", text="Days")
+        
+        # Define columns
+        self.course_tree.column("name", width=150)
+        self.course_tree.column("schedule", width=150)
+        self.course_tree.column("days", width=150)
+        
+        # Add scrollbar
+        course_scrollbar = ttk.Scrollbar(course_list_frame, orient=tk.VERTICAL, command=self.course_tree.yview)
+        self.course_tree.configure(yscroll=course_scrollbar.set)
+        
+        # Bind selection event
+        self.course_tree.bind("<<TreeviewSelect>>", self.on_course_selected)
+        
+        # Pack tree and scrollbar
+        course_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.course_tree.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        
+        # Course control buttons
+        course_buttons_frame = ttk.Frame(course_list_frame)
+        course_buttons_frame.pack(fill=tk.X)
+        
+        ttk.Button(course_buttons_frame, text="Add Course", command=self.add_course_dialog).pack(side=tk.LEFT, padx=5)
+        ttk.Button(course_buttons_frame, text="Edit Course", command=self.edit_course_dialog).pack(side=tk.LEFT, padx=5)
+        ttk.Button(course_buttons_frame, text="Delete Course", command=self.delete_course).pack(side=tk.LEFT, padx=5)
+        
+        # ---- Right frame: Student Management ----
+        ttk.Label(right_frame, text="Students in Selected Course", font=("Helvetica", 12, "bold")).pack(anchor="w", pady=(0, 10))
+        
+        # Student list frame
+        student_list_frame = ttk.LabelFrame(right_frame, text="Students", padding=10)
+        student_list_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Student Treeview
+        columns = ("name",)
+        self.student_tree = ttk.Treeview(student_list_frame, columns=columns, show="headings")
+        
+        # Define heading
+        self.student_tree.heading("name", text="Student Name")
+        
+        # Define column
+        self.student_tree.column("name", width=200)
+        
+        # Add scrollbar
+        student_scrollbar = ttk.Scrollbar(student_list_frame, orient=tk.VERTICAL, command=self.student_tree.yview)
+        self.student_tree.configure(yscroll=student_scrollbar.set)
+        
+        # Pack tree and scrollbar
+        student_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.student_tree.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        
+        # Student control buttons
+        student_buttons_frame = ttk.Frame(student_list_frame)
+        student_buttons_frame.pack(fill=tk.X)
+        
+        ttk.Button(student_buttons_frame, text="Add Student", command=self.add_student_to_course).pack(side=tk.LEFT, padx=5)
+        ttk.Button(student_buttons_frame, text="Remove Student", command=self.remove_student_from_course).pack(side=tk.LEFT, padx=5)
+        ttk.Button(student_buttons_frame, text="Take Attendance", command=self.take_course_attendance).pack(side=tk.LEFT, padx=5)
+        
+        # Initialize course list
+        self.update_course_list()
     
     def select_tab(self, tab_idx):
         """Select a specific tab in the notebook."""
         notebook = self.root.winfo_children()[0].winfo_children()[0]  # Get the notebook widget
         notebook.select(tab_idx)
+        
+        # Reset attendance context when switching away from recognition tab
+        if tab_idx != 4:  # 4 is the index of Recognition tab
+            self.current_attendance_context = None
     
     def update_frame(self):
         """Update video frame in a separate thread."""
@@ -569,6 +730,12 @@ class AttendanceSystemApp:
                     
                     elif self.recognition_running:
                         # For recognition tab
+                        # Add course info to frame if in course context
+                        if self.current_attendance_context:
+                            course_name = self.current_attendance_context['course_name']
+                            cv2.putText(frame, f"Course: {course_name}", (10, 30), 
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        
                         # Detect and recognize faces
                         if self.recognizer:
                             faces = self.recognizer.detect_and_recognize(frame)
@@ -577,6 +744,15 @@ class AttendanceSystemApp:
                             for (x, y, w, h, label, confidence) in faces:
                                 # Draw rectangle around face
                                 color = (0, 255, 0) if label != "Unknown" else (0, 0, 255)
+                                
+                                # Check if in course mode and person is enrolled in this course
+                                if self.current_attendance_context and label != "Unknown":
+                                    course_id = self.current_attendance_context['course_id']
+                                    if course_id in self.courses:
+                                        students = self.courses[course_id].get('students', [])
+                                        if label not in students:
+                                            color = (0, 165, 255)  # Orange for not enrolled
+                                
                                 cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
                                 
                                 # Draw label with confidence
@@ -1050,7 +1226,15 @@ class AttendanceSystemApp:
         # Update UI
         self.start_recognition_btn.config(state="disabled")
         self.stop_recognition_btn.config(state="normal")
-        self.status_var.set("Recognition running...")
+        
+        # Update status message based on context
+        if self.current_attendance_context:
+            course_name = self.current_attendance_context['course_name']
+            self.status_var.set(f"Recognition running for course: {course_name}")
+            self.add_activity(f"Started face recognition for course: {course_name}")
+        else:
+            self.status_var.set("Recognition running...")
+            self.add_activity("Started face recognition")
         
         # Set flag and start thread
         self.recognition_running = True
@@ -1060,8 +1244,6 @@ class AttendanceSystemApp:
             self.frame_thread = threading.Thread(target=self.update_frame)
             self.frame_thread.daemon = True
             self.frame_thread.start()
-        
-        self.add_activity("Started face recognition")
     
     def stop_recognition(self):
         """Stop real-time face recognition."""
@@ -1071,44 +1253,69 @@ class AttendanceSystemApp:
             self.cap.release()
             self.cap = None
         
-        # Update UI
-        self.start_recognition_btn.config(state="normal")
+        # Update UI        self.start_recognition_btn.config(state="normal")
         self.stop_recognition_btn.config(state="disabled")
         self.status_var.set("Recognition stopped")
         
         self.add_activity("Stopped face recognition")
-    
     def update_attendance(self, person_name):
-        """Update attendance records when a person is recognized."""
-        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        """
+        Update attendance records when a person is recognized.
         
+        This method handles attendance tracking with course context awareness:
+        1. Checks if there's an active course context
+        2. Verifies if the person is enrolled in the course
+        3. Updates existing attendance records or creates new ones
+        4. Calculates duration between check-ins
+        5. Updates the attendance display
+        
+        Args:
+            person_name (str): The name of the recognized person
+            
+        Returns:
+            None
+        """
+        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        course_name = "General"
+        course_id = None
+        
+        # If we have an active course context, use it
+        if self.current_attendance_context:
+            course_id = self.current_attendance_context['course_id']
+            course_name = self.current_attendance_context['course_name']
+            
+            # Check if person is enrolled in this course
+            if course_id in self.courses:
+                students = self.courses[course_id].get('students', [])
+                if person_name not in students:
+                    # Skip attendance for students not in the course
+                    message = f"{person_name} detected but not enrolled in course {course_name}"
+                    self.logger.info(message)
+                    self.status_var.set(message)
+                    return
+        
+        # Initialize person's attendance records if not exists
         if person_name not in self.attendance_records:
-            # New person detected
-            self.attendance_records[person_name] = {
-                'time_in': current_time,
-                'time_out': current_time,
-                'id': None
-            }
-            
-            # Add to treeview
-            record_id = self.attendance_tree.insert('', 'end', 
-                                                  values=(person_name, current_time, current_time, "00:00:00"))
-            
-            # Store the ID
-            self.attendance_records[person_name]['id'] = record_id
-            
-            self.add_activity(f"{person_name} detected - attendance recorded")
-        else:
+            self.attendance_records[person_name] = []
+        
+        # Check if we already have an open attendance record for today
+        today = current_time.split(' ')[0]  # Get date part
+        
+        # Look for an existing record for the same person and course today
+        existing_record = None
+        for record in self.attendance_records[person_name]:
+            record_date = record['timestamp'].split(' ')[0]
+            if record_date == today and record.get('course_id') == course_id:
+                existing_record = record
+                break
+        
+        if existing_record:
             # Update existing record
-            record = self.attendance_records[person_name]
-            time_in = record['time_in']
-            
-            # Update time out
-            record['time_out'] = current_time
+            existing_record['time_out'] = current_time
             
             # Calculate duration
             try:
-                time_in_obj = time.strptime(time_in, "%Y-%m-%d %H:%M:%S")
+                time_in_obj = time.strptime(existing_record['time_in'], "%Y-%m-%d %H:%M:%S")
                 current_time_obj = time.strptime(current_time, "%Y-%m-%d %H:%M:%S")
                 
                 duration_seconds = time.mktime(current_time_obj) - time.mktime(time_in_obj)
@@ -1116,12 +1323,78 @@ class AttendanceSystemApp:
                 minutes, seconds = divmod(remainder, 60)
                 duration_str = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
                 
-                # Update treeview
-                self.attendance_tree.item(record['id'], 
-                                        values=(person_name, time_in, current_time, duration_str))
+                existing_record['duration'] = duration_str
+                
+                # Update UI
+                self.update_attendance_display()
                 
             except Exception as e:
                 print(f"Error calculating duration: {e}")
+        else:
+            # Create new record
+            record_id = str(time.time())  # Unique ID based on timestamp
+            new_record = {
+                'id': record_id,
+                'timestamp': current_time,
+                'time_in': current_time,
+                'time_out': current_time,
+                'duration': "00:00:00",
+                'course_id': course_id,
+                'course_name': course_name
+            }
+            
+            self.attendance_records[person_name].append(new_record)
+            
+            # Update UI
+            self.update_attendance_display()
+            
+            self.add_activity(f"{person_name} detected - attendance recorded for {course_name}")
+    
+    def update_attendance_display(self):
+        """Update the attendance treeview display."""
+        # Clear existing items
+        for item in self.attendance_tree.get_children():
+            self.attendance_tree.delete(item)
+        
+        # Get filters
+        selected_course = self.attendance_course_var.get()
+        selected_date = self.attendance_date_var.get()
+        
+        # Add records to treeview
+        for person_name, records in self.attendance_records.items():
+            for record in records:
+                if not isinstance(record, dict):
+                    continue  # Skip legacy format records
+                
+                # Extract date from timestamp
+                record_date = record['timestamp'].split(' ')[0]
+                record_time = record['timestamp'].split(' ')[1]
+                
+                course_name = record.get('course_name', 'General')
+                
+                # Apply filters
+                if selected_course != "All Courses" and course_name != selected_course:
+                    continue
+                    
+                if selected_date != "All Dates" and record_date != selected_date:
+                    continue
+                
+                # Format values
+                time_in = record.get('time_in', record['timestamp'])
+                time_out = record.get('time_out', record['timestamp'])
+                duration = record.get('duration', "00:00:00")
+                
+                # Add to treeview
+                self.attendance_tree.insert('', 'end', values=(
+                    person_name,
+                    course_name,
+                    record_date,
+                    time_in.split(' ')[1],  # Just show time part
+                    time_out.split(' ')[1],  # Just show time part
+                    duration
+                ))
+        
+        # Update filters        self.update_attendance_date_filter()
     
     def export_attendance(self):
         """Export attendance records to a CSV file."""
@@ -1140,20 +1413,23 @@ class AttendanceSystemApp:
             return  # User cancelled
         
         try:
-            with open(file_path, 'w') as f:
-                # Write header
-                f.write("Name,Time In,Time Out,Duration\n")
+            import csv
+            with open(file_path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
                 
-                # Write records
+                # Write header
+                writer.writerow(["Name", "Course", "Date", "Time In", "Time Out", "Duration"])
+                
+                # Write data from tree
                 for item_id in self.attendance_tree.get_children():
-                    values = self.attendance_tree.item(item_id)['values']
-                    f.write(f"{values[0]},{values[1]},{values[2]},{values[3]}\n")
-            
+                    values = self.attendance_tree.item(item_id, 'values')
+                    writer.writerow(values)
+                
             messagebox.showinfo("Success", f"Attendance records exported to {file_path}")
             self.add_activity(f"Exported attendance records to CSV file")
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to export records: {e}")
+            messagebox.showerror("Error", f"Failed to export: {str(e)}")
     
     def clear_attendance(self):
         """Clear all attendance records."""
@@ -1371,6 +1647,509 @@ class AttendanceSystemApp:
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save photo: {str(e)}")
+
+# ---- Course Management Methods ----
+    
+    def load_courses(self):
+        """Load saved courses from file."""
+        try:
+            course_file = os.path.join('data', 'courses.json')
+            if os.path.exists(course_file):
+                import json
+                with open(course_file, 'r') as f:
+                    self.courses = json.load(f)
+                self.logger.info(f"Loaded {len(self.courses)} courses")
+            else:
+                # Create sample courses if no courses exist
+                self.create_sample_courses()
+        except Exception as e:
+            self.logger.error(f"Error loading courses: {e}")
+            self.courses = {}
+    
+    def create_sample_courses(self):
+        """Create sample courses for demonstration."""
+        import uuid
+        
+        # Sample course 1
+        course_id1 = str(uuid.uuid4())
+        self.courses[course_id1] = {
+            'name': 'Introduction to AI',
+            'schedule': '10:00-12:00',
+            'days': ['Monday', 'Wednesday'],
+            'students': []
+        }
+        
+        # Sample course 2
+        course_id2 = str(uuid.uuid4())
+        self.courses[course_id2] = {
+            'name': 'Computer Vision',
+            'schedule': '14:00-16:00',
+            'days': ['Tuesday', 'Thursday'],
+            'students': []
+        }
+        
+        # Sample course 3
+        course_id3 = str(uuid.uuid4())
+        self.courses[course_id3] = {
+            'name': 'Machine Learning Lab',
+            'schedule': '09:00-11:00',
+            'days': ['Friday'],
+            'students': []
+        }
+        
+        # Save the sample courses
+        self.save_courses()
+        self.logger.info("Created sample courses")
+    def save_courses(self):
+        """Save courses to file."""
+        try:
+            course_file = os.path.join('data', 'courses.json')
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(course_file), exist_ok=True)
+            
+            import json
+            with open(course_file, 'w') as f:
+                json.dump(self.courses, f, indent=4)
+            self.logger.info(f"Saved {len(self.courses)} courses")
+            
+            # Update dashboard
+            try:
+                self.update_dashboard_courses()
+            except:
+                pass  # In case the dashboard hasn't been initialized yet
+            
+            # Update attendance course filter
+            try:
+                self.update_attendance_course_filter()
+            except:
+                pass  # In case the attendance tab hasn't been initialized yet
+                
+        except Exception as e:
+            self.logger.error(f"Error saving courses: {e}")
+            messagebox.showerror("Error", f"Failed to save courses: {e}")
+    
+    def update_course_list(self):
+        """Update the course list in the treeview."""
+        # Clear existing items
+        for item in self.course_tree.get_children():
+            self.course_tree.delete(item)
+        
+        # Add courses
+        for course_id, course_info in self.courses.items():
+            days_str = ", ".join(course_info.get('days', []))
+            self.course_tree.insert('', 'end', values=(
+                course_info['name'],
+                course_info.get('schedule', ''),
+                days_str
+            ), tags=(course_id,))
+    
+    def on_course_selected(self, event):
+        """Handle course selection event."""
+        selected_items = self.course_tree.selection()
+        if not selected_items:
+            self.current_course = None
+            return
+        
+        # Get course ID from tags
+        course_id = self.course_tree.item(selected_items[0], 'tags')[0]
+        self.current_course = course_id
+        
+        # Update student list
+        self.update_student_list()
+    
+    def update_student_list(self):
+        """Update the student list for the selected course."""
+        # Clear existing items
+        for item in self.student_tree.get_children():
+            self.student_tree.delete(item)
+        
+        if not self.current_course or self.current_course not in self.courses:
+            return
+        
+        # Add students
+        students = self.courses[self.current_course].get('students', [])
+        for student in students:
+            self.student_tree.insert('', 'end', values=(student,))
+    
+    def add_course_dialog(self):
+        """Show dialog to add a new course."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Add New Course")
+        dialog.geometry("400x300")
+        dialog.grab_set()  # Make it modal
+        
+        ttk.Label(dialog, text="Course Name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        name_var = tk.StringVar()
+        ttk.Entry(dialog, textvariable=name_var, width=30).grid(row=0, column=1, padx=10, pady=5)
+        
+        ttk.Label(dialog, text="Schedule (HH:MM-HH:MM):").grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        schedule_var = tk.StringVar()
+        ttk.Entry(dialog, textvariable=schedule_var, width=30).grid(row=1, column=1, padx=10, pady=5)
+        
+        ttk.Label(dialog, text="Days:").grid(row=2, column=0, sticky="w", padx=10, pady=5)
+        
+        # Checkboxes for days
+        days_frame = ttk.Frame(dialog)
+        days_frame.grid(row=2, column=1, sticky="w", padx=10, pady=5)
+        
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        day_vars = []
+        
+        for i, day in enumerate(days):
+            var = tk.BooleanVar()
+            day_vars.append(var)
+            ttk.Checkbutton(days_frame, text=day, variable=var).grid(row=i//3, column=i%3, sticky="w", padx=5, pady=2)
+        
+        # Buttons
+        button_frame = ttk.Frame(dialog)
+        button_frame.grid(row=3, column=0, columnspan=2, pady=15)
+        
+        ttk.Button(button_frame, text="Save", command=lambda: self.save_new_course(
+            name_var.get(), schedule_var.get(), [days[i] for i, var in enumerate(day_vars) if var.get()], dialog
+        )).pack(side=tk.LEFT, padx=10)
+        
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=10)
+    
+    def save_new_course(self, name, schedule, days, dialog):
+        """Save a new course."""
+        if not name:
+            messagebox.showerror("Error", "Course name is required")
+            return
+        
+        if not schedule:
+            messagebox.showerror("Error", "Schedule is required")
+            return
+        
+        if not days:
+            messagebox.showerror("Error", "At least one day must be selected")
+            return
+        
+        # Validate schedule format (HH:MM-HH:MM)
+        import re
+        if not re.match(r'^\d{1,2}:\d{2}-\d{1,2}:\d{2}$', schedule):
+            messagebox.showerror("Error", "Schedule must be in format HH:MM-HH:MM")
+            return
+        
+        # Create course ID
+        import uuid
+        course_id = str(uuid.uuid4())
+        
+        # Add course
+        self.courses[course_id] = {
+            'name': name,
+            'schedule': schedule,
+            'days': days,
+            'students': []
+        }
+        
+        # Save and update
+        self.save_courses()
+        self.update_course_list()
+        
+        # Close dialog
+        dialog.destroy()
+    
+    def edit_course_dialog(self):
+        """Show dialog to edit a course."""
+        if not self.current_course:
+            messagebox.showinfo("Info", "Please select a course to edit")
+            return
+        
+        course = self.courses[self.current_course]
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Edit Course")
+        dialog.geometry("400x300")
+        dialog.grab_set()  # Make it modal
+        
+        ttk.Label(dialog, text="Course Name:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        name_var = tk.StringVar(value=course['name'])
+        ttk.Entry(dialog, textvariable=name_var, width=30).grid(row=0, column=1, padx=10, pady=5)
+        
+        ttk.Label(dialog, text="Schedule (HH:MM-HH:MM):").grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        schedule_var = tk.StringVar(value=course.get('schedule', ''))
+        ttk.Entry(dialog, textvariable=schedule_var, width=30).grid(row=1, column=1, padx=10, pady=5)
+        
+        ttk.Label(dialog, text="Days:").grid(row=2, column=0, sticky="w", padx=10, pady=5)
+        
+        # Checkboxes for days
+        days_frame = ttk.Frame(dialog)
+        days_frame.grid(row=2, column=1, sticky="w", padx=10, pady=5)
+        
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        day_vars = []
+        
+        course_days = course.get('days', [])
+        
+        for i, day in enumerate(days):
+            var = tk.BooleanVar(value=day in course_days)
+            day_vars.append(var)
+            ttk.Checkbutton(days_frame, text=day, variable=var).grid(row=i//3, column=i%3, sticky="w", padx=5, pady=2)
+        
+        # Buttons
+        button_frame = ttk.Frame(dialog)
+        button_frame.grid(row=3, column=0, columnspan=2, pady=15)
+        
+        ttk.Button(button_frame, text="Save", command=lambda: self.save_edited_course(
+            name_var.get(), schedule_var.get(), [days[i] for i, var in enumerate(day_vars) if var.get()], dialog
+        )).pack(side=tk.LEFT, padx=10)
+        
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=10)
+    
+    def save_edited_course(self, name, schedule, days, dialog):
+        """Save an edited course."""
+        if not name:
+            messagebox.showerror("Error", "Course name is required")
+            return
+        
+        if not schedule:
+            messagebox.showerror("Error", "Schedule is required")
+            return
+        
+        if not days:
+            messagebox.showerror("Error", "At least one day must be selected")
+            return
+        
+        # Validate schedule format (HH:MM-HH:MM)
+        import re
+        if not re.match(r'^\d{1,2}:\d{2}-\d{1,2}:\d{2}$', schedule):
+            messagebox.showerror("Error", "Schedule must be in format HH:MM-HH:MM")
+            return
+        
+        # Get existing students
+        existing_students = self.courses[self.current_course].get('students', [])
+        
+        # Update course
+        self.courses[self.current_course].update({
+            'name': name,
+            'schedule': schedule,
+            'days': days,
+            'students': existing_students
+        })
+        
+        # Save and update
+        self.save_courses()
+        self.update_course_list()
+        
+        # Close dialog
+        dialog.destroy()
+    
+    def delete_course(self):
+        """Delete the selected course."""
+        if not self.current_course:
+            messagebox.showinfo("Info", "Please select a course to delete")
+            return
+        
+        # Confirm deletion
+        course_name = self.courses[self.current_course]['name']
+        if not messagebox.askyesno("Confirm", f"Are you sure you want to delete the course '{course_name}'?"):
+            return
+        
+        # Delete course
+        del self.courses[self.current_course]
+        
+        # Save and update
+        self.save_courses()
+        self.update_course_list()
+        
+        # Clear current course
+        self.current_course = None
+        self.update_student_list()
+    
+    def add_student_to_course(self):
+        """Add a student to the selected course."""
+        if not self.current_course:
+            messagebox.showinfo("Info", "Please select a course first")
+            return
+        
+        # Get available faces from dataset
+        available_faces = self.get_available_faces()
+        
+        if not available_faces:
+            messagebox.showinfo("Info", "No faces available in the dataset")
+            return
+        
+        # Get current students in course
+        current_students = self.courses[self.current_course].get('students', [])
+        
+        # Show selection dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Add Student to Course")
+        dialog.geometry("400x300")
+        dialog.grab_set()  # Make it modal
+        
+        ttk.Label(dialog, text="Select student to add:").pack(anchor="w", padx=10, pady=5)
+        
+        # Create listbox with available faces
+        listbox_frame = ttk.Frame(dialog)
+        listbox_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        scrollbar = ttk.Scrollbar(listbox_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        face_listbox = tk.Listbox(listbox_frame, yscrollcommand=scrollbar.set)
+        scrollbar.config(command=face_listbox.yview)
+        face_listbox.pack(fill=tk.BOTH, expand=True)
+        
+        # Add faces to listbox (exclude ones already in the course)
+        available_students = [face for face in available_faces if face not in current_students]
+        
+        if not available_students:
+            messagebox.showinfo("Info", "All available faces are already added to this course")
+            dialog.destroy()
+            return
+        
+        for face in available_students:
+            face_listbox.insert(tk.END, face)
+        
+        # Buttons
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=10)
+        
+        ttk.Button(button_frame, text="Add", command=lambda: self.add_selected_student(
+            face_listbox.get(face_listbox.curselection()[0]) if face_listbox.curselection() else None, dialog
+        )).pack(side=tk.LEFT, padx=10)
+        
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=10)
+    
+    def add_selected_student(self, student, dialog):
+        """Add selected student to the course."""
+        if not student:
+            messagebox.showinfo("Info", "Please select a student")
+            return
+        
+        # Add student to course
+        self.courses[self.current_course].setdefault('students', []).append(student)
+        
+        # Save and update
+        self.save_courses()
+        self.update_student_list()
+        
+        # Close dialog
+        dialog.destroy()
+    
+    def remove_student_from_course(self):
+        """Remove a student from the selected course."""
+        selected_items = self.student_tree.selection()
+        if not selected_items:
+            messagebox.showinfo("Info", "Please select a student to remove")
+            return
+        
+        # Get student name
+        student_name = self.student_tree.item(selected_items[0], 'values')[0]
+        
+        # Confirm removal
+        if not messagebox.askyesno("Confirm", f"Are you sure you want to remove '{student_name}' from this course?"):
+            return
+        
+        # Remove student
+        students = self.courses[self.current_course].get('students', [])
+        students.remove(student_name)
+        self.courses[self.current_course]['students'] = students
+        
+        # Save and update
+        self.save_courses()
+        self.update_student_list()
+    
+    def get_available_faces(self):
+        """Get list of available face names from the dataset."""
+        # Check in raw data directory
+        raw_dir = os.path.join('data', 'raw')
+        if not os.path.exists(raw_dir):
+            return []
+        
+        available_faces = []
+        for item in os.listdir(raw_dir):
+            item_path = os.path.join(raw_dir, item)
+            if os.path.isdir(item_path) and not item.startswith('.'):
+                available_faces.append(item)
+        
+        return available_faces
+    def take_course_attendance(self):
+        """
+        Start recognition for taking attendance for the selected course.
+        
+        This method:
+        1. Sets up a course-specific attendance context
+        2. Switches to the recognition tab
+        3. Starts the face recognition process
+        4. Only records attendance for students enrolled in the course
+        """
+        if not self.current_course:
+            messagebox.showinfo("Info", "Please select a course first")
+            return
+        
+        course_name = self.courses[self.current_course]['name']
+        students = self.courses[self.current_course].get('students', [])
+        
+        if not students:
+            messagebox.showinfo("Info", "This course has no students")
+            return
+        
+        # Switch to recognition tab and start recognition
+        self.select_tab(4)  # Index of Recognition tab
+        
+        # Set course context for attendance
+        self.current_attendance_context = {
+            'course_id': self.current_course,
+            'course_name': course_name
+        }
+        
+        # Start recognition
+        self.start_recognition()
+
+    def update_attendance_course_filter(self):
+        """Update the course filter dropdown with available courses."""
+        courses = ["All Courses"]
+        
+        # Add course names
+        for course_id, course_info in self.courses.items():
+            courses.append(course_info['name'])
+        
+        self.course_combobox['values'] = courses
+        
+        # Update dates based on selected course
+        self.update_attendance_date_filter()
+    
+    def update_attendance_date_filter(self):
+        """Update the date filter dropdown with available dates."""
+        dates = ["All Dates"]
+        
+        # Get unique dates from attendance records
+        for record_list in self.attendance_records.values():
+            for record in record_list:
+                if isinstance(record, dict) and 'timestamp' in record:
+                    date = record['timestamp'].split(' ')[0]  # Extract date part
+                    if date not in dates:
+                        dates.append(date)
+        
+        self.date_combobox['values'] = sorted(dates)
+    
+    def filter_attendance_by_course(self, event=None):
+        """Filter attendance records by selected course."""
+        self.update_attendance_display()
+    
+    def filter_attendance_by_date(self, event=None):
+        """Filter attendance records by selected date."""
+        self.update_attendance_display()
+
+    def update_dashboard_courses(self):
+        """Update the course information displayed on the dashboard."""
+        # Clear existing items
+        for item in self.dashboard_course_tree.get_children():
+            self.dashboard_course_tree.delete(item)
+        
+        # Add courses
+        for course_id, course_info in self.courses.items():
+            days_str = ", ".join(course_info.get('days', []))
+            student_count = len(course_info.get('students', []))
+            
+            self.dashboard_course_tree.insert('', 'end', values=(
+                course_info['name'],
+                course_info.get('schedule', ''),
+                days_str,
+                student_count
+            ))
 
 def main():
     """Main function to start the application."""
