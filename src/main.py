@@ -1,11 +1,11 @@
 import os
 import argparse
 import logging
-from utils import setup_logger
-from capture import FaceCapture
-from extract import FeatureExtractor
-from train import FaceRecognitionModel
-from recognize import FaceRecognizer
+from src.utils import setup_logger
+from src.capture import FaceCapture
+from src.extract import FeatureExtractor
+from src.train import FaceRecognitionModel
+from src.recognize import FaceRecognizer
 
 def main():
     """
