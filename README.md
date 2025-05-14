@@ -118,7 +118,35 @@ The GUI includes several tabs:
 
 ## Course Management
 
-The system now includes comprehensive course management functionality that integrates with face recognition for attendance tracking.
+The system includes comprehensive course management functionality that integrates with face recognition for attendance tracking:
+
+### Key Features
+
+- **Course Management**: Create, edit and delete courses with schedules and weekday information
+- **Student Assignment**: Assign captured faces/students to specific courses
+- **Course-Specific Attendance**: Take attendance for specific courses, with validation for enrolled students
+- **Photo-Based Attendance**: Upload class photos to record attendance
+- **Attendance Filtering**: Filter attendance records by course, date, and source (camera/photo)
+
+### Using Course Management
+
+1. **Creating Courses**:
+   - Navigate to the Courses tab
+   - Click "Add Course" and enter course details
+   - Specify schedule and select weekdays
+
+2. **Assigning Students**:
+   - Select a course from the course list
+   - Click "Add Student" to assign students from the face dataset
+
+3. **Taking Course Attendance**:
+   - **Camera Method**: Select a course and click "Take Attendance"
+   - **Photo Method**: Select a course and click "Photo Attendance", then upload a class photo
+
+4. **Viewing Attendance**:
+   - Navigate to the Attendance tab
+   - Use filters to view attendance by course, date, and source
+   - Export attendance records to CSV
 
 ### Features
 
@@ -169,6 +197,49 @@ The system now includes comprehensive course management functionality that integ
 1. Navigate to the **Attendance** tab
 2. Use the course and date filters to view specific records
 3. Click "Export" to save the filtered data as a CSV file
+
+## Photo-Based Attendance
+
+The system supports attendance tracking through uploaded photos, allowing instructors to take attendance from class photos even when real-time recognition isn't feasible.
+
+### Features
+
+1. **Photo Upload and Processing**
+   - Upload class photos in common formats (JPG, PNG)
+   - Process photos to detect and recognize multiple faces simultaneously
+   - Visual indicators show recognition results directly on the photo
+
+2. **Course Integration**
+   - Select a specific course for photo attendance
+   - System validates that recognized students are enrolled in the course
+   - Non-enrolled students are identified but not marked as present
+
+3. **Source Tracking**
+   - Attendance records track the source (camera/photo)
+   - Filter attendance records by source
+   - Export includes source information
+
+### Usage Guide
+
+#### Taking Photo Attendance
+
+**Method 1: From Course Tab**
+1. Select a course from the list
+2. Click "Photo Attendance" button
+3. System will switch to Photo Recognition tab with the course pre-selected
+4. Upload a class photo using "Upload Photo"
+5. Process the photo using "Process Photo"
+6. Click "Take Course Attendance" to record attendance
+
+**Method 2: From Photo Recognition Tab**
+1. Navigate to the Photo Recognition tab
+2. Select a course from the dropdown
+3. Upload and process a photo
+4. Click "Take Course Attendance"
+
+The system will provide a summary of:
+- Students present (enrolled and recognized)
+- Students detected but not enrolled (recognized but not in the course)
 
 ## Contributing
 

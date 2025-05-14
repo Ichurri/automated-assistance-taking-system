@@ -55,6 +55,12 @@ self.courses = {
 
 - `update_dashboard_courses()`: Updates course summary on dashboard
 
+#### Photo Attendance Methods
+
+- `update_photo_course_combo()`: Updates course dropdown in photo recognition tab
+- `take_photo_attendance()`: Records attendance for a course using processed photo
+- `photo_course_attendance()`: Initiates photo attendance for the selected course
+
 ## Integration Points
 
 1. **Recognition Flow**:
@@ -73,6 +79,13 @@ self.courses = {
      - Course ID and name
      - Timestamp, time in, time out
      - Duration
+     - Source (camera/photo)
+
+4. **Photo Recognition Integration**:
+   - Photos can be used for course-specific attendance
+   - System validates recognized faces against course enrollment
+   - User interface provides feedback on recognized faces that aren't enrolled
+   - Attendance records include "photo" as the source
 
 ## File Structure
 
@@ -80,6 +93,7 @@ self.courses = {
 - `gui/app.py`: Course management implementation
     - `setup_course_tab()`: Course UI initialization
     - `setup_attendance_tab()`: Attendance tab with course filtering
+    - `setup_photo_recognition_tab()`: Photo recognition with course integration
 
 ## Enhancement Ideas
 

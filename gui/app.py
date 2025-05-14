@@ -506,6 +506,15 @@ class AttendanceSystemApp:
         confidence_entry = ttk.Entry(settings_frame, textvariable=self.photo_confidence_var)
         confidence_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
         
+        # Add course selection
+        ttk.Label(settings_frame, text="Course:").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+        self.photo_course_var = tk.StringVar(value="None")
+        self.photo_course_combo = ttk.Combobox(settings_frame, textvariable=self.photo_course_var, state="readonly")
+        self.photo_course_combo.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
+        
+        # Populate course dropdown
+        self.update_photo_course_combo()
+        
         settings_frame.columnconfigure(1, weight=1)
         
         # Control buttons
@@ -521,6 +530,11 @@ class AttendanceSystemApp:
         self.save_result_btn = ttk.Button(buttons_frame, text="Save Result", command=self.save_photo_result, state="disabled")
         self.save_result_btn.pack(fill=tk.X, padx=5, pady=5)
         
+        # Take attendance with photo button
+        self.take_photo_attendance_btn = ttk.Button(buttons_frame, text="Take Course Attendance", 
+                                                  command=self.take_photo_attendance, state="disabled")
+        self.take_photo_attendance_btn.pack(fill=tk.X, padx=5, pady=5)
+        
         # Recognition results
         results_frame = ttk.LabelFrame(left_panel, text="Results", padding=10)
         results_frame.pack(fill=tk.BOTH, expand=True, pady=10)
@@ -534,11 +548,12 @@ class AttendanceSystemApp:
         
         self.photo_canvas = tk.Canvas(right_panel, bg="black")
         self.photo_canvas.pack(fill=tk.BOTH, expand=True)
-          # Store variables for photo recognition
+        
+        # Store variables for photo recognition
         self.current_photo_path = None
         self.processed_photo = None
         self.photo_recognition_results = []
-        
+    
     def setup_attendance_tab(self, parent):
         """Set up the attendance records tab."""
         frame = ttk.Frame(parent, padding=10)
@@ -570,12 +585,21 @@ class AttendanceSystemApp:
         self.date_combobox.pack(side=tk.LEFT)
         self.date_combobox.bind("<<ComboboxSelected>>", self.filter_attendance_by_date)
         
+        # Source filter
+        source_frame = ttk.Frame(top_frame)
+        source_frame.pack(side=tk.LEFT, padx=20)
+        
+        ttk.Label(source_frame, text="Source:").pack(side=tk.LEFT, padx=(0, 5))
+        self.attendance_source_var = tk.StringVar(value="All Sources")
+        self.source_combobox = ttk.Combobox(source_frame, textvariable=self.attendance_source_var, 
+                                          values=["All Sources", "Camera", "Photo"], width=12)
+        self.source_combobox.pack(side=tk.LEFT)
+        self.source_combobox.bind("<<ComboboxSelected>>", self.filter_attendance_by_source)
+        
         # Export and clear buttons
         ttk.Button(top_frame, text="Export", command=self.export_attendance).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(top_frame, text="Clear All", command=self.clear_attendance).pack(side=tk.RIGHT, padx=5)
-        
-        # Attendance treeview
-        columns = ("name", "course", "date", "time_in", "time_out", "duration")
+        ttk.Button(top_frame, text="Clear All", command=self.clear_attendance).pack(side=tk.RIGHT, padx=5)          # Attendance treeview
+        columns = ("name", "course", "date", "time_in", "time_out", "duration", "source", "status")
         self.attendance_tree = ttk.Treeview(frame, columns=columns, show="headings")
         
         # Define headings
@@ -585,6 +609,8 @@ class AttendanceSystemApp:
         self.attendance_tree.heading("time_in", text="Time In")
         self.attendance_tree.heading("time_out", text="Time Out")
         self.attendance_tree.heading("duration", text="Duration")
+        self.attendance_tree.heading("source", text="Source")
+        self.attendance_tree.heading("status", text="Status")
         
         # Define columns
         self.attendance_tree.column("name", width=150)
@@ -593,6 +619,8 @@ class AttendanceSystemApp:
         self.attendance_tree.column("time_in", width=100)
         self.attendance_tree.column("time_out", width=100)
         self.attendance_tree.column("duration", width=80)
+        self.attendance_tree.column("source", width=80)
+        self.attendance_tree.column("status", width=80)
         
         # Add a scrollbar
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.attendance_tree.yview)
@@ -673,8 +701,7 @@ class AttendanceSystemApp:
         
         # Define column
         self.student_tree.column("name", width=200)
-        
-        # Add scrollbar
+          # Add scrollbar
         student_scrollbar = ttk.Scrollbar(student_list_frame, orient=tk.VERTICAL, command=self.student_tree.yview)
         self.student_tree.configure(yscroll=student_scrollbar.set)
         
@@ -682,13 +709,15 @@ class AttendanceSystemApp:
         student_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.student_tree.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
-        # Student control buttons
+        # Create student buttons frame
         student_buttons_frame = ttk.Frame(student_list_frame)
         student_buttons_frame.pack(fill=tk.X)
         
-        ttk.Button(student_buttons_frame, text="Add Student", command=self.add_student_to_course).pack(side=tk.LEFT, padx=5)
+        # Add buttons to the frame        ttk.Button(student_buttons_frame, text="Add Student", command=self.add_student_to_course).pack(side=tk.LEFT, padx=5)
         ttk.Button(student_buttons_frame, text="Remove Student", command=self.remove_student_from_course).pack(side=tk.LEFT, padx=5)
         ttk.Button(student_buttons_frame, text="Take Attendance", command=self.take_course_attendance).pack(side=tk.LEFT, padx=5)
+        ttk.Button(student_buttons_frame, text="Photo Attendance", command=self.photo_course_attendance).pack(side=tk.LEFT, padx=5)
+        ttk.Button(student_buttons_frame, text="View Full Attendance", command=self.view_course_attendance_report).pack(side=tk.LEFT, padx=5)
         
         # Initialize course list
         self.update_course_list()
@@ -759,14 +788,13 @@ class AttendanceSystemApp:
                                 text = f"{label} ({confidence:.2f})"
                                 cv2.putText(frame, text, (x, y-10), 
                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                                
-                                # Update recognition stats
+                                  # Update recognition stats
                                 if confidence > float(self.confidence_var.get()):
                                     self.current_person_var.set(label)
                                     self.confidence_level_var.set(f"{confidence:.2f}")
                                     
-                                    # Update attendance record
-                                    self.update_attendance(label)
+                                    # Update attendance record with confidence
+                                    self.update_attendance(label, source='camera', confidence=confidence)
                             
                             # Convert to PhotoImage
                             img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
@@ -1257,8 +1285,8 @@ class AttendanceSystemApp:
         self.stop_recognition_btn.config(state="disabled")
         self.status_var.set("Recognition stopped")
         
-        self.add_activity("Stopped face recognition")
-    def update_attendance(self, person_name):
+        self.add_activity("Stopped face recognition")    
+    def update_attendance(self, person_name, source='camera', confidence=None):
         """
         Update attendance records when a person is recognized.
         
@@ -1267,10 +1295,13 @@ class AttendanceSystemApp:
         2. Verifies if the person is enrolled in the course
         3. Updates existing attendance records or creates new ones
         4. Calculates duration between check-ins
-        5. Updates the attendance display
+        5. Determines if the student is present based on confidence level
+        6. Updates the attendance display
         
         Args:
             person_name (str): The name of the recognized person
+            source (str): Source of recognition ('camera' or 'photo')
+            confidence (float, optional): Confidence level of recognition
             
         Returns:
             None
@@ -1333,6 +1364,15 @@ class AttendanceSystemApp:
         else:
             # Create new record
             record_id = str(time.time())  # Unique ID based on timestamp
+            
+            # Determine status based on confidence level
+            status = "Present"
+            if confidence is not None:
+                # Get presence threshold - higher than recognition threshold
+                presence_threshold = float(self.confidence_var.get()) + 0.1
+                if confidence < presence_threshold:
+                    status = "Uncertain"
+            
             new_record = {
                 'id': record_id,
                 'timestamp': current_time,
@@ -1340,7 +1380,10 @@ class AttendanceSystemApp:
                 'time_out': current_time,
                 'duration': "00:00:00",
                 'course_id': course_id,
-                'course_name': course_name
+                'course_name': course_name,
+                'source': source,
+                'confidence': confidence if confidence is not None else 0.0,
+                'status': status
             }
             
             self.attendance_records[person_name].append(new_record)
@@ -1359,6 +1402,7 @@ class AttendanceSystemApp:
         # Get filters
         selected_course = self.attendance_course_var.get()
         selected_date = self.attendance_date_var.get()
+        selected_source = self.attendance_source_var.get()
         
         # Add records to treeview
         for person_name, records in self.attendance_records.items():
@@ -1371,6 +1415,7 @@ class AttendanceSystemApp:
                 record_time = record['timestamp'].split(' ')[1]
                 
                 course_name = record.get('course_name', 'General')
+                source = record.get('source', 'camera').capitalize()
                 
                 # Apply filters
                 if selected_course != "All Courses" and course_name != selected_course:
@@ -1378,11 +1423,14 @@ class AttendanceSystemApp:
                     
                 if selected_date != "All Dates" and record_date != selected_date:
                     continue
-                
-                # Format values
+                    
+                if selected_source != "All Sources" and source != selected_source:
+                    continue
+                      # Format values
                 time_in = record.get('time_in', record['timestamp'])
                 time_out = record.get('time_out', record['timestamp'])
                 duration = record.get('duration', "00:00:00")
+                status = record.get('status', "Present")  # Get status with default value
                 
                 # Add to treeview
                 self.attendance_tree.insert('', 'end', values=(
@@ -1391,7 +1439,9 @@ class AttendanceSystemApp:
                     record_date,
                     time_in.split(' ')[1],  # Just show time part
                     time_out.split(' ')[1],  # Just show time part
-                    duration
+                    duration,
+                    source,
+                    status
                 ))
         
         # Update filters        self.update_attendance_date_filter()
@@ -1411,14 +1461,13 @@ class AttendanceSystemApp:
         
         if not file_path:
             return  # User cancelled
-        
         try:
             import csv
             with open(file_path, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile)
                 
                 # Write header
-                writer.writerow(["Name", "Course", "Date", "Time In", "Time Out", "Duration"])
+                writer.writerow(["Name", "Course", "Date", "Time In", "Time Out", "Duration", "Source", "Status"])
                 
                 # Write data from tree
                 for item_id in self.attendance_tree.get_children():
@@ -1520,10 +1569,10 @@ class AttendanceSystemApp:
             self.photo_results_text.delete(1.0, tk.END)
             self.photo_results_text.insert(tk.END, f"Photo loaded: {os.path.basename(file_path)}\n")
             self.photo_results_text.insert(tk.END, "Click 'Process Photo' to detect and recognize faces.")
-            
-            # Enable process button
+              # Enable process button
             self.process_photo_btn.config(state="normal")
             self.save_result_btn.config(state="disabled")
+            self.take_photo_attendance_btn.config(state="disabled")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load image: {str(e)}")
@@ -1588,19 +1637,20 @@ class AttendanceSystemApp:
                 canvas_width//2, canvas_height//2,
                 image=self.photo_tk, anchor=tk.CENTER
             )
-            
-            # Update results text
+              # Update results text
             self.photo_results_text.delete(1.0, tk.END)
             if recognition_results:
                 self.photo_results_text.insert(tk.END, f"Found {len(recognition_results)} face(s):\n\n")
                 for i, (_, _, _, _, label, confidence) in enumerate(recognition_results):
                     self.photo_results_text.insert(tk.END, f"Face {i+1}: {label} ({confidence:.2f})\n")
                 
-                # Enable save button
+                # Enable save and take attendance buttons
                 self.save_result_btn.config(state="normal")
+                self.take_photo_attendance_btn.config(state="normal")
             else:
                 self.photo_results_text.insert(tk.END, "No faces detected in the image.")
                 self.save_result_btn.config(state="disabled")
+                self.take_photo_attendance_btn.config(state="disabled")
                 
         except Exception as e:
             messagebox.showerror("Error", f"Error processing photo: {str(e)}")
@@ -1625,11 +1675,16 @@ class AttendanceSystemApp:
         try:
             cv2.imwrite(save_path, self.processed_photo)
             messagebox.showinfo("Success", f"Processed photo saved to {save_path}")
-            
-            # Also update attendance records if there are recognized persons
+              # Also update attendance records if there are recognized persons
             for _, _, _, _, label, confidence in self.photo_recognition_results:
                 if label != "Unknown" and confidence >= self.photo_confidence_var.get():
                     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Determine status based on confidence level
+                    status = "Present"
+                    presence_threshold = float(self.photo_confidence_var.get()) + 0.1
+                    if confidence < presence_threshold:
+                        status = "Uncertain"
                     
                     if label not in self.attendance_records:
                         self.attendance_records[label] = []
@@ -1637,7 +1692,8 @@ class AttendanceSystemApp:
                     self.attendance_records[label].append({
                         'timestamp': timestamp,
                         'source': 'photo',
-                        'confidence': confidence
+                        'confidence': confidence,
+                        'status': status
                     })
                     
                     self.logger.info(f"{label} detected in photo - attendance recorded")
@@ -1711,8 +1767,7 @@ class AttendanceSystemApp:
             with open(course_file, 'w') as f:
                 json.dump(self.courses, f, indent=4)
             self.logger.info(f"Saved {len(self.courses)} courses")
-            
-            # Update dashboard
+              # Update dashboard
             try:
                 self.update_dashboard_courses()
             except:
@@ -1723,6 +1778,12 @@ class AttendanceSystemApp:
                 self.update_attendance_course_filter()
             except:
                 pass  # In case the attendance tab hasn't been initialized yet
+                
+            # Update photo recognition course combo
+            try:
+                self.update_photo_course_combo()
+            except:
+                pass  # In case the photo tab hasn't been initialized yet
                 
         except Exception as e:
             self.logger.error(f"Error saving courses: {e}")
@@ -2132,6 +2193,10 @@ class AttendanceSystemApp:
     def filter_attendance_by_date(self, event=None):
         """Filter attendance records by selected date."""
         self.update_attendance_display()
+    
+    def filter_attendance_by_source(self, event=None):
+        """Filter attendance records by selected source."""
+        self.update_attendance_display()
 
     def update_dashboard_courses(self):
         """Update the course information displayed on the dashboard."""
@@ -2150,6 +2215,356 @@ class AttendanceSystemApp:
                 days_str,
                 student_count
             ))
+
+    def update_photo_course_combo(self):
+        """Update the course combo box in the photo recognition tab."""
+        # Get list of course names
+        course_options = ["None"]  # Default option
+        
+        for course_id, course_info in self.courses.items():
+            course_options.append(course_info['name'])
+            
+        # Update combo box values
+        self.photo_course_combo['values'] = course_options
+        
+        # Reset to default
+        if self.photo_course_var.get() not in course_options:
+            self.photo_course_var.set("None")
+
+    def take_photo_attendance(self):
+        """Take course attendance using the processed photo."""
+        if self.processed_photo is None or not self.photo_recognition_results:
+            messagebox.showinfo("Info", "Please process a photo with recognized faces first.")
+            return
+            
+        course_name = self.photo_course_var.get()
+        if course_name == "None":
+            messagebox.showinfo("Info", "Please select a course for attendance.")
+            return
+            
+        # Find course ID from name
+        course_id = None
+        for cid, course_info in self.courses.items():
+            if course_info['name'] == course_name:
+                course_id = cid
+                break
+                
+        if not course_id:
+            messagebox.showerror("Error", "Selected course not found.")
+            return
+            
+        # Get list of students in the course
+        students = self.courses[course_id].get('students', [])
+        if not students:
+            messagebox.showinfo("Info", "This course has no students assigned.")
+            return
+            
+        # Check which recognized faces are enrolled in the course
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        detected_students = []
+        non_enrolled_students = []
+        
+        for _, _, _, _, label, confidence in self.photo_recognition_results:
+            if label != "Unknown" and confidence >= self.photo_confidence_var.get():
+                if label in students:
+                    detected_students.append(label)
+                      # Create or update attendance record
+                    if label not in self.attendance_records:
+                        self.attendance_records[label] = []
+                        
+                    # Determine status based on confidence level
+                    status = "Present"
+                    presence_threshold = float(self.photo_confidence_var.get()) + 0.1
+                    if confidence < presence_threshold:
+                        status = "Uncertain"
+                        
+                    # Add attendance record with course info
+                    # Generate unique ID based on timestamp
+                    record_id = str(time.time())
+                    new_record = {
+                        'id': record_id,
+                        'timestamp': timestamp,
+                        'time_in': timestamp,
+                        'time_out': timestamp,
+                        'duration': "00:00:00",
+                        'course_id': course_id,
+                        'course_name': course_name,
+                        'source': 'photo',
+                        'confidence': confidence,
+                        'status': status
+                    }
+                    
+                    self.attendance_records[label].append(new_record)
+                else:
+                    non_enrolled_students.append(label)
+        
+        # Update the results text
+        self.photo_results_text.delete(1.0, tk.END)
+        if detected_students:
+            self.photo_results_text.insert(tk.END, f"Attendance recorded for course: {course_name}\n\n")
+            self.photo_results_text.insert(tk.END, f"Students present ({len(detected_students)}):\n")
+            for student in detected_students:
+                self.photo_results_text.insert(tk.END, f"- {student}\n")
+        else:
+            self.photo_results_text.insert(tk.END, f"No enrolled students detected for course: {course_name}\n")
+            
+        if non_enrolled_students:
+            self.photo_results_text.insert(tk.END, f"\nDetected but not enrolled ({len(non_enrolled_students)}):\n")
+            for student in non_enrolled_students:
+                self.photo_results_text.insert(tk.END, f"- {student}\n")
+                
+        # Log activity
+        self.add_activity(f"Photo attendance taken for {course_name}: {len(detected_students)} students present")
+        
+        # Update attendance display
+        self.update_attendance_display()
+        
+        # Show success message
+        if detected_students:
+            messagebox.showinfo("Success", f"Attendance recorded for {len(detected_students)} students in {course_name}")
+        else:
+            messagebox.showinfo("Info", "No enrolled students were detected in the photo.")
+
+    def photo_course_attendance(self):
+        """Start photo attendance for the selected course."""
+        if not self.current_course:
+            messagebox.showinfo("Info", "Please select a course first")
+            return
+        
+        course_name = self.courses[self.current_course]['name']
+        students = self.courses[self.current_course].get('students', [])
+        
+        if not students:
+            messagebox.showinfo("Info", "This course has no students")
+            return
+        
+        # Switch to photo recognition tab
+        self.select_tab(5)  # Index of Photo Recognition tab
+        
+        # Set course in dropdown
+        self.photo_course_var.set(course_name)
+        
+        # Show guide message
+        self.photo_results_text.delete(1.0, tk.END)
+        self.photo_results_text.insert(tk.END, f"Ready to take attendance for course: {course_name}\n\n")
+        self.photo_results_text.insert(tk.END, "1. Click 'Upload Photo' to select a class photo\n")
+        self.photo_results_text.insert(tk.END, "2. Click 'Process Photo' to detect faces\n")
+        self.photo_results_text.insert(tk.END, "3. Click 'Take Course Attendance' to record attendance\n\n")
+        self.photo_results_text.insert(tk.END, f"Current students enrolled: {len(students)}")
+
+    def view_course_attendance_report(self):
+        """
+        Display a comprehensive attendance report for the selected course showing all students.
+        
+        This shows all enrolled students with their attendance status:
+        - Present: Student was detected with high confidence
+        - Uncertain: Student was detected but with lower confidence
+        - Absent: Student was not detected at all
+        """
+        if not self.current_course:
+            messagebox.showinfo("Info", "Please select a course first")
+            return
+            
+        course_name = self.courses[self.current_course]['name']
+        students = self.courses[self.current_course].get('students', [])
+        
+        if not students:
+            messagebox.showinfo("Info", "This course has no students enrolled")
+            return
+        
+        # Create a dialog to show the full attendance report
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Attendance Report: {course_name}")
+        dialog.geometry("800x600")
+        dialog.grab_set()  # Make it modal
+        
+        # Set up the dialog content
+        ttk.Label(dialog, text=f"Attendance Report for {course_name}", 
+                 font=("Helvetica", 14, "bold")).pack(pady=10)
+        
+        # Choose date for the report
+        date_frame = ttk.Frame(dialog)
+        date_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(date_frame, text="Select Date:").pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Get available dates from attendance records
+        dates = ["Today"]  # Default option
+        today = time.strftime("%Y-%m-%d")
+        
+        # Add all unique dates from attendance records
+        for person_name, records in self.attendance_records.items():
+            for record in records:
+                if isinstance(record, dict) and 'timestamp' in record:
+                    date = record['timestamp'].split(' ')[0]
+                    if date not in dates and date != today:
+                        dates.append(date)
+        
+        # Sort dates with "Today" at the top
+        dates = ["Today"] + sorted([d for d in dates if d != "Today"])
+        
+        # Date selection dropdown
+        date_var = tk.StringVar(value="Today")
+        date_combo = ttk.Combobox(date_frame, textvariable=date_var, values=dates, width=15)
+        date_combo.pack(side=tk.LEFT, padx=5)
+        
+        refresh_btn = ttk.Button(date_frame, text="Refresh", 
+                                command=lambda: self.update_attendance_report(report_tree, date_var.get(), students))
+        refresh_btn.pack(side=tk.LEFT, padx=20)
+        
+        # Export button
+        export_btn = ttk.Button(date_frame, text="Export Report", 
+                              command=lambda: self.export_attendance_report(
+                                  report_tree, course_name, date_var.get()))
+        export_btn.pack(side=tk.RIGHT, padx=10)
+        
+        # Create treeview for the report
+        report_frame = ttk.Frame(dialog)
+        report_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Attendance report treeview
+        columns = ("name", "status", "time_in", "time_out", "duration", "confidence")
+        report_tree = ttk.Treeview(report_frame, columns=columns, show="headings")
+        
+        # Define headings
+        report_tree.heading("name", text="Student Name")
+        report_tree.heading("status", text="Status")
+        report_tree.heading("time_in", text="Time In")
+        report_tree.heading("time_out", text="Time Out")
+        report_tree.heading("duration", text="Duration")
+        report_tree.heading("confidence", text="Confidence")
+        
+        # Define columns
+        report_tree.column("name", width=150)
+        report_tree.column("status", width=100)
+        report_tree.column("time_in", width=100)
+        report_tree.column("time_out", width=100)
+        report_tree.column("duration", width=100)
+        report_tree.column("confidence", width=100)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(report_frame, orient=tk.VERTICAL, command=report_tree.yview)
+        report_tree.configure(yscroll=scrollbar.set)
+        
+        # Pack tree and scrollbar
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        report_tree.pack(fill=tk.BOTH, expand=True)
+        
+        # Add color coding for different statuses
+        report_tree.tag_configure('present', background='#CCFFCC')  # Light green
+        report_tree.tag_configure('uncertain', background='#FFFFCC')  # Light yellow
+        report_tree.tag_configure('absent', background='#FFCCCC')  # Light red
+        
+        # Close button
+        ttk.Button(dialog, text="Close", command=dialog.destroy).pack(pady=10)
+        
+        # Populate the initial report
+        self.update_attendance_report(report_tree, date_var.get(), students)
+    
+    def update_attendance_report(self, tree, date_str, students):
+        """Update the attendance report treeview with the latest data."""
+        # Clear current items
+        for item in tree.get_children():
+            tree.delete(item)
+        
+        # Convert "Today" to actual date
+        if date_str == "Today":
+            date = time.strftime("%Y-%m-%d")
+        else:
+            date = date_str
+        
+        # Get the current course
+        course_id = self.current_course
+        
+        if not course_id or course_id not in self.courses:
+            return
+            
+        course_name = self.courses[course_id]['name']
+        
+        # Process each student
+        for student in students:
+            # Check if student has attendance records for this date and course
+            attendance_record = None
+            
+            if student in self.attendance_records:
+                # Look for a record for this student, course, and date
+                for record in self.attendance_records[student]:
+                    if not isinstance(record, dict):
+                        continue
+                        
+                    record_date = record['timestamp'].split(' ')[0]
+                    record_course_id = record.get('course_id')
+                    
+                    if record_date == date and record_course_id == course_id:
+                        attendance_record = record
+                        break
+            
+            # Define values based on attendance status
+            if attendance_record:
+                status = attendance_record.get('status', 'Present')
+                time_in = attendance_record.get('time_in', '-').split(' ')[1]
+                time_out = attendance_record.get('time_out', '-').split(' ')[1]
+                duration = attendance_record.get('duration', '-')
+                confidence = f"{attendance_record.get('confidence', 0.0):.2f}"
+                tag = status.lower()
+            else:
+                # Student was absent
+                status = "Absent"
+                time_in = "-"
+                time_out = "-"
+                duration = "-"
+                confidence = "-"
+                tag = 'absent'
+            
+            # Insert into treeview with appropriate tag for coloring
+            tree.insert('', 'end', values=(
+                student, status, time_in, time_out, duration, confidence
+            ), tags=(tag,))
+    
+    def export_attendance_report(self, tree, course_name, date_str):
+        """Export the attendance report to a CSV file."""
+        if not tree.get_children():
+            messagebox.showinfo("Info", "No attendance data to export")
+            return
+        
+        # Convert "Today" to actual date for the filename
+        if date_str == "Today":
+            date = time.strftime("%Y-%m-%d")
+        else:
+            date = date_str
+        
+        # Ask for file to save
+        default_filename = f"attendance_report_{course_name}_{date}.csv"
+        default_filename = default_filename.replace(" ", "_")
+        
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            title="Export Attendance Report",
+            initialfile=default_filename
+        )
+        
+        if not file_path:
+            return  # User cancelled
+        
+        try:
+            import csv
+            with open(file_path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                
+                # Write header
+                writer.writerow(["Student Name", "Status", "Time In", "Time Out", "Duration", "Confidence"])
+                
+                # Write data from tree
+                for item_id in tree.get_children():
+                    values = tree.item(item_id, 'values')
+                    writer.writerow(values)
+                
+            messagebox.showinfo("Success", f"Attendance report exported to {file_path}")
+            self.add_activity(f"Exported attendance report for {course_name} on {date}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export: {str(e)}")
 
 def main():
     """Main function to start the application."""

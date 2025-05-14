@@ -1,39 +1,14 @@
 {
-    "2279ea13-d15a-40b8-8dbb-c52a0c62be2f": {
-        "name": "Introduction to AI",
-        "schedule": "10:00-12:00",
-        "days": [
-            "Monday",
-            "Wednesday"
-        ],
-        "students": []
-    },
-    "d50ddd03-10aa-4107-9b69-fe4533aa8ce6": {
-        "name": "Computer Vision",
-        "schedule": "14:00-16:00",
+    "f4747be3-1fc5-4de0-92af-216ff9a3afd7": {
+        "name": "asdfdsa",
+        "schedule": "03:12-12:12",
         "days": [
             "Tuesday",
-            "Thursday"
-        ],
-        "students": []
-    },
-    "65a69dac-2b1b-41a7-8fda-c10f05367196": {
-        "name": "Machine Learning Lab",
-        "schedule": "09:00-11:00",
-        "days": [
             "Friday"
         ],
-        "students": []
-    },
-    "1536296f-0ded-4c09-a613-d28fb7731d36": {
-        "name": "Metodologia de la Investigacion",
-        "schedule": "10:45-12:15",
-        "days": [
-            "Tuesday",
-            "Thursday"
-        ],
         "students": [
-            "Diego Trigo"
+            "Diego Trigo",
+            "Santiago Iturri"
         ]
     }
 }

@@ -9,6 +9,7 @@ The system provides the following features:
 - Real-time face recognition for attendance tracking
 - Course management (registration, schedules, student assignment)
 - Course-specific attendance tracking
+- Photo-based attendance recognition
 - Attendance record management and export
 
 Run this script to start the application.
