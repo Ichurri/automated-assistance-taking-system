@@ -708,12 +708,13 @@ class AttendanceSystemApp:
         # Pack tree and scrollbar
         student_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.student_tree.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        
-        # Create student buttons frame
+          # Create student buttons frame
         student_buttons_frame = ttk.Frame(student_list_frame)
         student_buttons_frame.pack(fill=tk.X)
         
-        # Add buttons to the frame        ttk.Button(student_buttons_frame, text="Add Student", command=self.add_student_to_course).pack(side=tk.LEFT, padx=5)
+        # Add buttons to the frame
+        ttk.Button(student_buttons_frame, text="Add Student", command=self.add_student_to_course).pack(side=tk.LEFT, padx=5)
+        ttk.Button(student_buttons_frame, text="Create New Student", command=self.create_new_student).pack(side=tk.LEFT, padx=5)
         ttk.Button(student_buttons_frame, text="Remove Student", command=self.remove_student_from_course).pack(side=tk.LEFT, padx=5)
         ttk.Button(student_buttons_frame, text="Take Attendance", command=self.take_course_attendance).pack(side=tk.LEFT, padx=5)
         ttk.Button(student_buttons_frame, text="Photo Attendance", command=self.photo_course_attendance).pack(side=tk.LEFT, padx=5)
@@ -2088,6 +2089,73 @@ class AttendanceSystemApp:
         
         # Close dialog
         dialog.destroy()
+    
+    def create_new_student(self):
+        """Create a new student without requiring face data."""
+        if not self.current_course:
+            messagebox.showinfo("Info", "Please select a course first")
+            return
+        
+        # Show dialog to enter student name
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Create New Student")
+        dialog.geometry("400x200")
+        dialog.grab_set()  # Make it modal
+        
+        # Dialog content
+        ttk.Label(dialog, text="Create a new student without face data:", 
+                  font=("Helvetica", 11)).pack(anchor="w", padx=10, pady=(15, 5))
+        
+        ttk.Label(dialog, text="Student Name:").pack(anchor="w", padx=10, pady=5)
+        name_var = tk.StringVar()
+        name_entry = ttk.Entry(dialog, textvariable=name_var, width=30)
+        name_entry.pack(anchor="w", padx=10, pady=5)
+        name_entry.focus_set()  # Set focus to the entry
+        
+        # Help text
+        ttk.Label(dialog, text="Note: Students created without face data will appear in reports\nbut will not be recognized automatically.", 
+                  foreground="gray").pack(anchor="w", padx=10, pady=10)
+        
+        # Buttons
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=15)
+        
+        ttk.Button(button_frame, text="Create", command=lambda: self.add_manual_student(
+            name_var.get(), dialog
+        )).pack(side=tk.LEFT, padx=10)
+        
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=10)
+    
+    def add_manual_student(self, student_name, dialog):
+        """Add a manually created student to the course."""
+        if not student_name or student_name.strip() == "":
+            messagebox.showerror("Error", "Please enter a student name")
+            return
+        
+        # Clean the name
+        student_name = student_name.strip()
+        
+        # Check if student with this name already exists in the course
+        current_students = self.courses[self.current_course].get('students', [])
+        if student_name in current_students:
+            messagebox.showerror("Error", f"Student '{student_name}' already exists in this course")
+            return
+        
+        # Add student to course
+        self.courses[self.current_course].setdefault('students', []).append(student_name)
+        
+        # Save and update
+        self.save_courses()
+        self.update_student_list()
+        
+        # Close dialog
+        dialog.destroy()
+        
+        # Log the action
+        self.add_activity(f"Created and added student '{student_name}' to course '{self.courses[self.current_course]['name']}'")
+        
+        # Show success message
+        messagebox.showinfo("Success", f"Student '{student_name}' added successfully")
     
     def remove_student_from_course(self):
         """Remove a student from the selected course."""

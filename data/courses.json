@@ -1,14 +1,13 @@
 {
-    "f4747be3-1fc5-4de0-92af-216ff9a3afd7": {
-        "name": "asdfdsa",
-        "schedule": "03:12-12:12",
+    "782164df-e9ef-42c3-ab9c-5994da84b198": {
+        "name": "Sistemas Inteligentes",
+        "schedule": "16:00-17:30",
         "days": [
             "Tuesday",
-            "Friday"
+            "Thursday"
         ],
         "students": [
-            "Diego Trigo",
-            "Santiago Iturri"
+            "Pedro Amparoz"
         ]
     }
 }
