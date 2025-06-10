@@ -22,13 +22,52 @@ class FaceCapture:
         self.min_face_size = min_face_size
         
         # Load face detection cascade
-        cascades_dir = os.path.join(cv2.__path__[0], 'data')
-        self.face_cascade = cv2.CascadeClassifier(
-            os.path.join(cascades_dir, 'haarcascade_frontalface_default.xml')
-        )
+        # Try multiple methods to find the cascade file
+        cascade_file = None
+        
+        # Method 1: Try using cv2.data if available (OpenCV 4.x)
+        if hasattr(cv2, 'data'):
+            cascade_file = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        
+        # Method 2: Try standard OpenCV installation paths
+        if cascade_file is None or not os.path.exists(cascade_file):
+            possible_paths = [
+                '/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml',
+                '/usr/local/share/opencv4/haarcascades/haarcascade_frontalface_default.xml',
+                '/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml',
+                '/usr/local/share/opencv/haarcascades/haarcascade_frontalface_default.xml'
+            ]
+            
+            for path in possible_paths:
+                if os.path.exists(path):
+                    cascade_file = path
+                    break
+        
+        # Method 3: Try using pkg_resources if available
+        if cascade_file is None or not os.path.exists(cascade_file):
+            try:
+                import pkg_resources
+                cascade_file = pkg_resources.resource_filename('cv2', 'data/haarcascade_frontalface_default.xml')
+            except:
+                pass
+        
+        # Method 4: Last resort - try relative to cv2 module location
+        if cascade_file is None or not os.path.exists(cascade_file):
+            try:
+                cv2_path = os.path.dirname(cv2.__file__)
+                cascade_file = os.path.join(cv2_path, 'data', 'haarcascade_frontalface_default.xml')
+            except:
+                pass
+        
+        # Load the cascade classifier
+        if cascade_file and os.path.exists(cascade_file):
+            self.face_cascade = cv2.CascadeClassifier(cascade_file)
+        else:
+            # If all methods fail, try loading without path (OpenCV might find it automatically)
+            self.face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
         
         if self.face_cascade.empty():
-            error_msg = "Error: Could not load face cascade classifier"
+            error_msg = "Error: Could not load face cascade classifier. Please ensure OpenCV is properly installed with Haar cascades."
             logging.error(error_msg)
             raise ValueError(error_msg)
         
