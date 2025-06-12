@@ -23,6 +23,7 @@ data/processed/*
 !data/processed/.gitkeep
 
 # Model files
+models/*.keras
 models/*.h5
 models/*.npy
 models/*.png
